@@ -1,0 +1,12 @@
+# GPU-accelerated dependencies (Linux only)
+# Install these AFTER installing requirements.txt
+
+# JAX with CUDA support
+--find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+jax[cuda12_pip]>=0.4.20
+
+# TensorFlow GPU support (optional, if needed)
+tensorflow[and-cuda]>=2.16.0
+
+# Note: Requires CUDA 12.x toolkit to be installed on system
+# See: https://developer.nvidia.com/cuda-downloads

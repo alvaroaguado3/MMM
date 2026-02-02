@@ -1,0 +1,243 @@
+# Bayesian Prior Configuration Template
+# Define channel-specific priors for the Meridian model
+
+# ROI Priors (Return on Investment)
+# Format: LogNormal(loc, scale) where loc = log(median ROI), scale = uncertainty
+# Example: loc=0.3 means median ROI of ~35%, scale=0.8 means 80% uncertainty
+
+roi_priors:
+  # Television
+  tv_national:
+    distribution: "lognormal"
+    loc: 0.2  # Expect ~22% ROI
+    scale: 0.9  # High uncertainty (broad channel)
+    notes: "National TV campaigns, brand building"
+    
+  tv_local:
+    distribution: "lognormal"
+    loc: 0.15  # Expect ~16% ROI
+    scale: 0.95
+    notes: "Local TV, regional campaigns"
+    
+  # Digital Video
+  youtube_video:
+    distribution: "lognormal"
+    loc: 0.25  # Expect ~28% ROI
+    scale: 0.85
+    notes: "YouTube video ads"
+    
+  connected_tv:
+    distribution: "lognormal"
+    loc: 0.20
+    scale: 0.90
+    notes: "Connected TV/OTT advertising"
+    
+  # Paid Search
+  search_brand:
+    distribution: "lognormal"
+    loc: 1.5  # Expect ~350% ROI (high-performing)
+    scale: 0.6  # Lower uncertainty (measurable)
+    notes: "Branded search terms"
+    
+  search_generic:
+    distribution: "lognormal"
+    loc: 0.5  # Expect ~65% ROI
+    scale: 0.75
+    notes: "Generic/non-brand search terms"
+    
+  # Social Media
+  facebook:
+    distribution: "lognormal"
+    loc: 0.35  # Expect ~42% ROI
+    scale: 0.80
+    notes: "Facebook advertising"
+    
+  instagram:
+    distribution: "lognormal"
+    loc: 0.30
+    scale: 0.82
+    notes: "Instagram advertising"
+    
+  # Display
+  display_programmatic:
+    distribution: "lognormal"
+    loc: 0.10  # Expect ~11% ROI (lower funnel)
+    scale: 1.0  # High uncertainty
+    notes: "Programmatic display advertising"
+    
+  # Out of Home
+  outdoor:
+    distribution: "lognormal"
+    loc: 0.08  # Expect ~8% ROI (brand building)
+    scale: 1.1
+    notes: "Billboards, transit advertising"
+    
+  # Radio
+  radio:
+    distribution: "lognormal"
+    loc: 0.12
+    scale: 1.0
+    notes: "Radio advertising"
+    
+  # Print
+  print:
+    distribution: "lognormal"
+    loc: 0.05  # Expect ~5% ROI (declining channel)
+    scale: 1.2  # Very high uncertainty
+    notes: "Newspaper and magazine advertising"
+
+# Saturation Curve Priors
+# Defines where each channel reaches saturation (diminishing returns)
+saturation_priors:
+  tv_national:
+    hill_ec: 0.6  # Saturates at ~60% of max spend observed
+    hill_slope: 2.5  # Moderate saturation curve
+    notes: "Broad reach channel"
+    
+  search_brand:
+    hill_ec: 0.3  # Saturates quickly
+    hill_slope: 3.0  # Steep saturation
+    notes: "Limited branded search inventory"
+    
+  facebook:
+    hill_ec: 0.5
+    hill_slope: 2.0
+    notes: "Algorithm-optimized delivery"
+    
+  # Default for channels not specified
+  default:
+    hill_ec: 0.5
+    hill_slope: 2.0
+
+# Adstock (Lagged Effects) Priors
+# Defines how media effects decay over time
+adstock_priors:
+  # TV has longer-lasting effects (brand building)
+  tv_national:
+    max_lag: 13  # Effects last up to 13 weeks
+    decay_rate: 0.7  # Slow decay
+    peak_lag: 2  # Peak effect at week 2
+    notes: "Long-term brand building effects"
+    
+  tv_local:
+    max_lag: 10
+    decay_rate: 0.75
+    peak_lag: 1
+    
+  # Search has immediate effects
+  search_brand:
+    max_lag: 3  # Effects last up to 3 weeks
+    decay_rate: 0.3  # Fast decay
+    peak_lag: 0  # Immediate effect
+    notes: "Direct response, short window"
+    
+  search_generic:
+    max_lag: 4
+    decay_rate: 0.4
+    peak_lag: 0
+    
+  # Social media moderate persistence
+  facebook:
+    max_lag: 6
+    decay_rate: 0.6
+    peak_lag: 1
+    
+  instagram:
+    max_lag: 6
+    decay_rate: 0.6
+    peak_lag: 1
+    
+  # Default for unspecified channels
+  default:
+    max_lag: 8
+    decay_rate: 0.6
+    peak_lag: 1
+
+# Coverage Factors (Sell-in to Sell-out Adjustments)
+# Scalar multipliers to adjust for measurement coverage differences
+coverage_factors:
+  tv_national:
+    factor: 1.0  # No adjustment (100% coverage)
+    notes: "Full sell-out coverage"
+    
+  tv_local:
+    factor: 0.95  # 95% coverage
+    notes: "Slight undercoverage in sell-out data"
+    
+  search_brand:
+    factor: 1.0
+    notes: "Digital channels have perfect tracking"
+    
+  search_generic:
+    factor: 1.0
+    
+  facebook:
+    factor: 1.0
+    
+  outdoor:
+    factor: 1.10  # 110% adjustment
+    notes: "Sell-out is 91% of sell-in (adjust ROI up by 10%)"
+    
+  print:
+    factor: 1.05
+    notes: "Slight coverage gap"
+    
+  # Default (no adjustment)
+  default:
+    factor: 1.0
+
+# Marginal Curve Shape Priors
+# Defines the shape of the marginal response curve
+marginal_curve_priors:
+  # Concave curves (diminishing returns) are typical
+  tv_national:
+    shape: "concave"
+    curvature: 0.7  # Strong diminishing returns
+    
+  search_brand:
+    shape: "concave"
+    curvature: 0.9  # Moderate diminishing returns
+    
+  # Some channels may have S-curves (slow start, then acceleration)
+  display_programmatic:
+    shape: "s_curve"
+    inflection_point: 0.3
+    
+  default:
+    shape: "concave"
+    curvature: 0.8
+
+# Control Variable Priors (External Factors)
+control_priors:
+  # Seasonality handled automatically by Meridian
+  # But you can specify priors for other controls
+  
+  google_query_volume:
+    coefficient_prior_mean: 0.3
+    coefficient_prior_std: 0.2
+    notes: "Positive correlation with sales"
+    
+  promotions:
+    coefficient_prior_mean: 0.5
+    coefficient_prior_std: 0.3
+    notes: "Strong positive effect expected"
+    
+  competitor_spend:
+    coefficient_prior_mean: -0.2
+    coefficient_prior_std: 0.15
+    notes: "Negative effect on our sales"
+    
+  macroeconomic_index:
+    coefficient_prior_mean: 0.4
+    coefficient_prior_std: 0.25
+    notes: "Economic conditions affect sales"
+
+# Notes and Guidelines
+notes:
+  - "All ROI priors are specified as LogNormal(loc, scale)"
+  - "loc = log(median ROI), so loc=0 means 100% ROI (1x return)"
+  - "scale represents uncertainty: 0.5 = tight, 1.0 = loose, 1.5 = very loose"
+  - "Saturation parameters should be estimated from data when possible"
+  - "Coverage factors > 1.0 increase ROI, < 1.0 decrease ROI"
+  - "Consult lift tests and experiments to calibrate priors"
+  - "Start with weak (uninformative) priors, then tighten based on evidence"

@@ -1,0 +1,33 @@
+# Database Configuration
+# Copy this file to database.yaml and update with your credentials
+
+database:
+  # PostgreSQL connection settings
+  host: localhost
+  port: 5432
+  database: meridian_mmm
+  username: postgres
+  password: your_password_here
+  
+  # Connection pool settings
+  pool_size: 5
+  max_overflow: 10
+  pool_timeout: 30
+  pool_recycle: 3600
+  
+  # Schema settings
+  schema: public
+  
+  # Table names
+  tables:
+    media_data: media_data
+    sales_data: sales_data
+    model_runs: model_runs
+    model_results: model_results
+    optimization_results: optimization_results
+    prior_configurations: prior_configurations
+
+# SQLite settings (for development/testing)
+sqlite:
+  enabled: false
+  database_path: ./data/meridian_mmm.db

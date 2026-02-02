@@ -1,0 +1,101 @@
+# Default Meridian Model Configuration
+# These are sensible defaults that can be overridden
+
+model:
+  # Model specification
+  kpi_type: "non_revenue"  # Options: "revenue" or "non_revenue"
+  
+  # MCMC sampling parameters
+  sampling:
+    n_warmup: 1000  # Number of warmup iterations
+    n_samples: 1000  # Number of sampling iterations
+    n_chains: 2  # Number of MCMC chains
+    random_seed: 42
+    
+  # Time parameters
+  time:
+    # Max lag in time periods (weeks/days depending on granularity)
+    max_lag: 13  # Default: 13 weeks (quarterly seasonality)
+    
+    # Number of knots for time-varying effects
+    n_knots: 3
+    
+    # Adstock decay specification
+    adstock_decay_spec: "normal"  # Options: "normal", "delayed", "geometric"
+    
+  # Saturation parameters
+  saturation:
+    # Hill saturation function parameters
+    # These will be estimated by the model if not provided
+    default_hill_ec: 0.5  # Half-saturation point
+    default_hill_slope: 2.0  # Slope parameter
+    
+  # Prior types
+  priors:
+    # Treatment prior type for paid media
+    # Options: "roi", "mroi", "contribution", "coefficient"
+    treatment_prior_type: "roi"
+    
+    # Prior type for reach and frequency (if used)
+    rf_prior_type: "coefficient"
+    
+    # Control variable prior type
+    control_prior_type: "coefficient"
+    
+  # Model features
+  features:
+    use_reach_frequency: false  # Set to true if R&F data available
+    use_organic_media: false  # Set to true if organic media included
+    use_non_media_treatments: false  # Set to true for non-media treatments
+    
+  # Geo-level modeling
+  geo:
+    hierarchical: true  # Use hierarchical modeling across geos
+    population_scaling: true  # Scale by population
+
+# Optimization defaults
+optimization:
+  # Constraint levels (as percentages of current spend)
+  constraints:
+    small:
+      min_change_pct: -10
+      max_change_pct: 10
+    medium:
+      min_change_pct: -50
+      max_change_pct: 50
+    unconstrained:
+      min_change_pct: -100
+      max_change_pct: 100
+      
+  # Objective functions
+  objectives:
+    roi: "maximize_roi"  # Maximize return on investment
+    efficiency: "minimize_cost"  # Minimize cost for target sales
+    sales: "maximize_sales"  # Maximize sales for budget
+    
+  # Optimization algorithm parameters
+  algorithm:
+    max_iterations: 1000
+    tolerance: 1e-6
+    
+# Validation thresholds
+validation:
+  # Data quality checks
+  min_non_zero_pct: 0.05  # Minimum 5% non-zero values for media
+  max_missing_pct: 0.02  # Maximum 2% missing values allowed
+  
+  # Model diagnostics thresholds
+  min_rhat: 0.95
+  max_rhat: 1.05  # Convergence diagnostic
+  min_ess: 400  # Minimum effective sample size
+  
+  # Model fit thresholds
+  min_r_squared: 0.5  # Minimum R-squared for acceptable fit
+  max_mape: 0.20  # Maximum 20% MAPE
+
+# Logging configuration
+logging:
+  level: INFO  # Options: DEBUG, INFO, WARNING, ERROR
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: logs/meridian_platform.log
+  console: true

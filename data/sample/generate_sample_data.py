@@ -8,8 +8,8 @@ np.random.seed(42)
 
 # --- Configuration ---
 start_date = "2023-01-01"
-end_date = "2024-12-31"  # 2 years of daily data
-geos = [f"DMA_{str(i).zfill(3)}" for i in range(1, 11)]  # 10 geos
+end_date = "2024-12-29"  # ~2 years of weekly data
+geos = ["New_York", "Los_Angeles", "Chicago", "Houston", "Phoenix"]  # 5 markets
 
 channels = {
     "TV_National": {"base_spend": 15000, "metric_type": "GRPs", "base_metric": 50},
@@ -22,7 +22,7 @@ channels = {
     "Email": {"base_spend": 500, "metric_type": "sends", "base_metric": 10000},
 }
 
-dates = pd.date_range(start=start_date, end=end_date, freq="D")
+dates = pd.date_range(start=start_date, end=end_date, freq="W-MON")  # Weekly
 
 # --- Generate Media Data ---
 media_rows = []
@@ -37,15 +37,11 @@ for date in dates:
     # Weekend effect (lower spend on weekends for some channels)
     weekend = 1.0 if day_of_week < 5 else 0.6
 
-    for geo in geos:
+    for geo_idx, geo in enumerate(geos):
         # Geo-level scale factor (some geos are bigger markets)
-        geo_scale = 0.5 + 1.5 * (int(geo.split("_")[1]) / 10)
+        geo_scale = 0.5 + 1.5 * ((geo_idx + 1) / len(geos))
 
         for channel, cfg in channels.items():
-            # Some channels don't run on weekends
-            if channel in ("Email",) and day_of_week >= 5:
-                continue
-
             noise = np.random.lognormal(0, 0.15)
             spend_mult = seasonal * (weekend if channel != "TV_National" else 1.0) * geo_scale * noise
             spend = round(cfg["base_spend"] * spend_mult, 2)
@@ -75,9 +71,8 @@ for date in dates:
     # Weekend boost for sales
     weekend_boost = 1.15 if day_of_week >= 5 else 1.0
 
-    for geo in geos:
-        geo_idx = int(geo.split("_")[1])
-        geo_scale = 0.5 + 1.5 * (geo_idx / 10)
+    for geo_idx, geo in enumerate(geos):
+        geo_scale = 0.5 + 1.5 * ((geo_idx + 1) / len(geos))
 
         # Base sales
         base_sales = 50000 * geo_scale * seasonal * weekend_boost
@@ -103,7 +98,7 @@ sales_df = pd.DataFrame(sales_rows)
 
 # --- Generate Population Data (one row per geo) ---
 population_rows = []
-base_populations = [500000, 750000, 1000000, 1250000, 1500000, 1750000, 2000000, 2250000, 2500000, 2750000]
+base_populations = [8300000, 3900000, 2700000, 2300000, 1600000]  # Approximate city populations
 for i, geo in enumerate(geos):
     population_rows.append({"geo": geo, "population": base_populations[i]})
 

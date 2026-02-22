@@ -6,8 +6,6 @@ Main application for interactive Marketing Mix Modeling.
 
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 from pathlib import Path
 import sys
 from PIL import Image
@@ -24,6 +22,15 @@ try:
     MODELING_AVAILABLE = True
 except ImportError:
     MODELING_AVAILABLE = False
+
+# Try to import Meridian visualizer classes
+try:
+    from meridian.analysis.visualizer import (
+        ModelDiagnostics, ModelFit, MediaEffects, MediaSummary
+    )
+    VISUALIZER_AVAILABLE = True
+except ImportError:
+    VISUALIZER_AVAILABLE = False
 
 # Page configuration
 st.set_page_config(
@@ -65,6 +72,8 @@ def initialize_session_state():
         st.session_state.model = None
     if 'model_results' not in st.session_state:
         st.session_state.model_results = None
+    if 'training_just_completed' not in st.session_state:
+        st.session_state.training_just_completed = False
 
 
 def data_upload_page():
@@ -312,34 +321,40 @@ def model_training_page():
     # Model configuration
     st.subheader("⚙️ Model Configuration")
     
+    aggregate_weekly = st.checkbox(
+        "Aggregate data to weekly",
+        value=True,
+        help="Strongly recommended. Reduces daily data to weekly, making training much faster."
+    )
+
     col1, col2, col3 = st.columns(3)
-    
+
     with col1:
         kpi_type = st.selectbox(
             "KPI Type",
             options=['non_revenue', 'revenue'],
             help="Whether KPI is revenue or another metric"
         )
-        
+
         n_warmup = st.number_input(
             "Warmup Iterations",
-            min_value=100,
+            min_value=50,
             max_value=5000,
-            value=1000,
-            step=100,
-            help="Number of MCMC warmup iterations"
+            value=500,
+            step=50,
+            help="Number of MCMC adaptation/burn-in iterations"
         )
-    
+
     with col2:
         n_samples = st.number_input(
             "Sampling Iterations",
-            min_value=100,
+            min_value=50,
             max_value=5000,
-            value=1000,
-            step=100,
-            help="Number of MCMC sampling iterations"
+            value=500,
+            step=50,
+            help="Number of MCMC samples to keep"
         )
-        
+
         n_chains = st.number_input(
             "Number of Chains",
             min_value=1,
@@ -347,13 +362,13 @@ def model_training_page():
             value=2,
             help="Number of parallel MCMC chains"
         )
-    
+
     with col3:
         max_lag = st.number_input(
             "Max Lag (weeks)",
             min_value=1,
             max_value=26,
-            value=13,
+            value=8,
             help="Maximum adstock lag in time periods"
         )
         
@@ -365,132 +380,310 @@ def model_training_page():
         )
     
     st.markdown("---")
-    
+
+    # Show post-training success message after rerun
+    if st.session_state.training_just_completed:
+        st.session_state.training_just_completed = False
+        st.success("Model training complete!")
+        diagnostics = st.session_state.get('diagnostics', {})
+        if diagnostics.get('convergence', {}).get('overall_converged'):
+            st.success("Model converged successfully")
+        else:
+            st.warning("Convergence issues detected - review diagnostics below")
+        if 'summary' in diagnostics:
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.metric("R-hat (max)", f"{diagnostics['summary']['r_hat_max']:.4f}")
+            with col_b:
+                st.metric("R-hat (mean)", f"{diagnostics['summary']['r_hat_mean']:.4f}")
+
     # Train button
     if st.button("🚀 Train Model", type="primary", use_container_width=True):
         try:
             with st.spinner("Training Meridian model... This may take several minutes."):
-                # Initialize progress bar
                 progress_bar = st.progress(0)
                 status_text = st.empty()
-                
-                # Create model runner
+
                 status_text.text("Initializing model...")
                 progress_bar.progress(10)
-                
+
                 runner = MeridianModelRunner(
                     media_data=st.session_state.media_data,
                     sales_data=st.session_state.sales_data,
                     population_data=st.session_state.population_data,
                     priors_config=st.session_state.priors_config
                 )
-                
-                # Prepare data
+
                 status_text.text("Preparing data...")
                 progress_bar.progress(20)
-                runner.prepare_data()
-                
-                # Create model spec
+                runner.prepare_data(aggregate_weekly=aggregate_weekly)
+
                 status_text.text("Creating model specification...")
                 progress_bar.progress(30)
                 runner.create_model_spec()
-                
-                # Train
+
                 status_text.text("Training model (this takes time)...")
                 progress_bar.progress(40)
-                
-                model = runner.train(
+
+                runner.train(
                     n_warmup=n_warmup,
                     n_samples=n_samples,
                     n_chains=n_chains,
                     seed=seed
                 )
-                
+
                 progress_bar.progress(80)
-                
-                # Get diagnostics
+
                 status_text.text("Extracting diagnostics...")
                 diagnostics = runner.get_diagnostics()
-                
-                # Get results
+
                 status_text.text("Extracting results...")
                 progress_bar.progress(90)
                 results = runner.get_results()
-                
+
                 progress_bar.progress(100)
                 status_text.text("Complete!")
-                
-                # Save to session
+
                 st.session_state.model = runner
                 st.session_state.model_results = results
                 st.session_state.diagnostics = diagnostics
-                
-                st.success("✅ Model training complete!")
-                
-                # Show quick diagnostics
-                if diagnostics['convergence']['overall_converged']:
-                    st.success("✅ Model converged successfully")
-                else:
-                    st.warning("⚠️ Convergence issues detected - review diagnostics")
-                
-                col_a, col_b, col_c = st.columns(3)
-                with col_a:
-                    st.metric("R-hat (max)", f"{diagnostics['summary']['r_hat_max']:.4f}")
-                with col_b:
-                    st.metric("ESS (min)", f"{diagnostics['summary']['ess_bulk_min']:.0f}")
-                with col_c:
-                    if 'r_squared' in results.get('fit', {}):
-                        st.metric("R-squared", f"{results['fit']['r_squared']:.3f}")
-                
+                st.session_state.training_just_completed = True
+
+                st.rerun()
+
         except Exception as e:
-            st.error(f"❌ Training failed: {e}")
+            st.error(f"Training failed: {e}")
             import traceback
             with st.expander("Error Details"):
                 st.code(traceback.format_exc())
+
+    # Training diagnostics (shown when a model exists)
+    if st.session_state.model is not None and VISUALIZER_AVAILABLE:
+        st.markdown("---")
+        st.subheader("Model Diagnostics")
+
+        meridian_model = st.session_state.model.model
+
+        try:
+            diag = ModelDiagnostics(meridian_model)
+
+            st.markdown("**R-hat Convergence**")
+            try:
+                rhat_chart = diag.plot_rhat_boxplot()
+                st.altair_chart(rhat_chart, use_container_width=True)
+            except Exception as e:
+                st.warning(f"Could not render R-hat boxplot: {e}")
+
+            st.markdown("**Prior vs Posterior Distribution**")
+            try:
+                param_options = ['roi_m', 'beta_m', 'alpha', 'ec', 'slope']
+                selected_param = st.selectbox(
+                    "Parameter", param_options, key="diag_param"
+                )
+                pp_chart = diag.plot_prior_and_posterior_distribution(
+                    parameter=selected_param
+                )
+                st.altair_chart(pp_chart, use_container_width=True)
+            except Exception as e:
+                st.warning(f"Could not render prior/posterior plot: {e}")
+
+            st.markdown("**Predictive Accuracy**")
+            try:
+                acc_table = diag.predictive_accuracy_table()
+                st.dataframe(acc_table, use_container_width=True)
+            except Exception as e:
+                st.warning(f"Could not render predictive accuracy table: {e}")
+
+        except Exception as e:
+            st.warning(f"Could not initialize diagnostics visualizer: {e}")
 
 
 def results_page():
     """Model results and visualization page."""
     st.markdown('<p class="main-header">📊 Model Results</p>', unsafe_allow_html=True)
-    
+
     if st.session_state.model is None:
-        st.warning("⚠️ No trained model available. Please train a model first.")
+        st.warning("No trained model available. Please train a model first.")
         return
-    
-    results = st.session_state.model_results
-    
-    st.markdown("---")
-    
-    # ROI Results
-    st.subheader("💰 Return on Investment (ROI)")
-    
-    if 'roi_adjusted' in results:
-        roi_df = pd.DataFrame([
-            {'Channel': ch, 'ROI': roi, 'ROI %': f"{roi*100:.1f}%"}
-            for ch, roi in results['roi_adjusted'].items()
-        ]).sort_values('ROI', ascending=False)
-        
-        col1, col2 = st.columns([2, 1])
-        
-        with col1:
-            # ROI bar chart
-            fig = px.bar(
-                roi_df,
-                x='Channel',
-                y='ROI',
-                title="ROI by Channel",
-                color='ROI',
-                color_continuous_scale='RdYlGn'
-            )
-            fig.update_layout(height=400)
-            st.plotly_chart(fig, use_container_width=True)
-        
-        with col2:
-            # ROI table
-            st.dataframe(roi_df, use_container_width=True, hide_index=True)
-    
-    # More visualizations would go here...
-    st.info("Additional visualizations (response curves, contributions, etc.) would be implemented here.")
+
+    if not VISUALIZER_AVAILABLE:
+        st.error("Meridian visualizer classes not available. Install meridian package.")
+        return
+
+    meridian_model = st.session_state.model.model
+
+    tab_overview, tab_roi, tab_contrib, tab_response, tab_fit = st.tabs([
+        "Overview", "ROI & Effectiveness", "Contributions",
+        "Response Curves & Adstock", "Model Fit"
+    ])
+
+    # --- Tab 1: Overview ---
+    with tab_overview:
+        st.subheader("Summary Metrics")
+        try:
+            summary_viz = MediaSummary(meridian_model)
+            summary_df = summary_viz.summary_table()
+            st.dataframe(summary_df, use_container_width=True)
+        except Exception as e:
+            st.warning(f"Could not render summary table: {e}")
+
+        st.subheader("Predictive Accuracy")
+        try:
+            diag = ModelDiagnostics(meridian_model)
+            acc_table = diag.predictive_accuracy_table()
+            st.dataframe(acc_table, use_container_width=True)
+        except Exception as e:
+            st.warning(f"Could not render predictive accuracy: {e}")
+
+        st.subheader("ROI Ranking")
+        try:
+            results = st.session_state.model_results
+            if 'roi_adjusted' in results:
+                roi_df = pd.DataFrame([
+                    {'Channel': ch, 'ROI': roi}
+                    for ch, roi in results['roi_adjusted'].items()
+                ]).sort_values('ROI', ascending=False)
+                st.dataframe(roi_df, use_container_width=True, hide_index=True)
+        except Exception as e:
+            st.warning(f"Could not render ROI ranking: {e}")
+
+    # --- Tab 2: ROI & Effectiveness ---
+    with tab_roi:
+        try:
+            summary_viz = MediaSummary(meridian_model)
+        except Exception as e:
+            st.error(f"Could not initialize MediaSummary: {e}")
+            summary_viz = None
+
+        if summary_viz:
+            st.subheader("ROI by Channel")
+            try:
+                roi_chart = summary_viz.plot_roi_bar_chart(include_ci=True)
+                st.altair_chart(roi_chart, use_container_width=True)
+            except Exception as e:
+                st.warning(f"Could not render ROI bar chart: {e}")
+
+            st.subheader("Cost per Incremental KPI (CPIK)")
+            try:
+                cpik_chart = summary_viz.plot_cpik(include_ci=True)
+                st.altair_chart(cpik_chart, use_container_width=True)
+            except Exception as e:
+                st.warning(f"Could not render CPIK chart: {e}")
+
+            st.subheader("ROI vs Marginal ROI")
+            try:
+                roi_mroi_chart = summary_viz.plot_roi_vs_mroi()
+                st.altair_chart(roi_mroi_chart, use_container_width=True)
+            except Exception as e:
+                st.warning(f"Could not render ROI vs mROI: {e}")
+
+            st.subheader("ROI vs Effectiveness")
+            try:
+                roi_eff_chart = summary_viz.plot_roi_vs_effectiveness()
+                st.altair_chart(roi_eff_chart, use_container_width=True)
+            except Exception as e:
+                st.warning(f"Could not render ROI vs Effectiveness: {e}")
+
+    # --- Tab 3: Contributions ---
+    with tab_contrib:
+        try:
+            summary_viz = MediaSummary(meridian_model)
+        except Exception as e:
+            st.error(f"Could not initialize MediaSummary: {e}")
+            summary_viz = None
+
+        if summary_viz:
+            st.subheader("Contribution Waterfall")
+            try:
+                waterfall = summary_viz.plot_contribution_waterfall_chart()
+                st.altair_chart(waterfall, use_container_width=True)
+            except Exception as e:
+                st.warning(f"Could not render waterfall chart: {e}")
+
+            st.subheader("Contribution Pie Chart")
+            try:
+                pie_chart = summary_viz.plot_contribution_pie_chart()
+                st.altair_chart(pie_chart, use_container_width=True)
+            except Exception as e:
+                st.warning(f"Could not render pie chart: {e}")
+
+            st.subheader("Channel Contribution Over Time")
+            try:
+                granularity = st.selectbox(
+                    "Time Granularity",
+                    ["weekly", "monthly", "quarterly"],
+                    index=2,
+                    key="contrib_granularity"
+                )
+                area_chart = summary_viz.plot_channel_contribution_area_chart(
+                    time_granularity=granularity
+                )
+                st.altair_chart(area_chart, use_container_width=True)
+            except Exception as e:
+                st.warning(f"Could not render area chart: {e}")
+
+            st.subheader("Spend vs Contribution")
+            try:
+                spend_contrib = summary_viz.plot_spend_vs_contribution()
+                st.altair_chart(spend_contrib, use_container_width=True)
+            except Exception as e:
+                st.warning(f"Could not render spend vs contribution: {e}")
+
+    # --- Tab 4: Response Curves & Adstock ---
+    with tab_response:
+        try:
+            effects = MediaEffects(meridian_model)
+        except Exception as e:
+            st.error(f"Could not initialize MediaEffects: {e}")
+            effects = None
+
+        if effects:
+            st.subheader("Response Curves")
+            try:
+                response_chart = effects.plot_response_curves(include_ci=True)
+                st.altair_chart(response_chart, use_container_width=True)
+            except Exception as e:
+                st.warning(f"Could not render response curves: {e}")
+
+            st.subheader("Hill Saturation Curves")
+            try:
+                hill_charts = effects.plot_hill_curves()
+                # plot_hill_curves returns a dict: {channel_type: alt.Chart}
+                for chart_name, chart in hill_charts.items():
+                    st.markdown(f"**{chart_name}**")
+                    st.altair_chart(chart, use_container_width=True)
+            except Exception as e:
+                st.warning(f"Could not render Hill curves: {e}")
+
+            st.subheader("Adstock Decay")
+            try:
+                adstock_chart = effects.plot_adstock_decay(include_ci=True)
+                st.altair_chart(adstock_chart, use_container_width=True)
+            except Exception as e:
+                st.warning(f"Could not render adstock decay: {e}")
+
+    # --- Tab 5: Model Fit ---
+    with tab_fit:
+        try:
+            model_fit = ModelFit(meridian_model)
+        except Exception as e:
+            st.error(f"Could not initialize ModelFit: {e}")
+            model_fit = None
+
+        if model_fit:
+            st.subheader("Expected vs Actual Outcome")
+            show_geo = st.checkbox("Show geo-level breakdown", value=False,
+                                   key="fit_geo_level")
+            show_ci = st.checkbox("Include confidence interval", value=True,
+                                  key="fit_ci")
+            try:
+                fit_chart = model_fit.plot_model_fit(
+                    show_geo_level=show_geo,
+                    include_ci=show_ci
+                )
+                st.altair_chart(fit_chart, use_container_width=True)
+            except Exception as e:
+                st.warning(f"Could not render model fit chart: {e}")
 
 
 def optimization_page():
@@ -579,7 +772,7 @@ def main():
     
     # Sidebar
     with st.sidebar:
-        logo = Image.open("ui/assets/favicon.png")
+        logo = Image.open("ui/assets/logo.png")
         st.image(logo, use_container_width=True)
         
         st.markdown("### Navigation")

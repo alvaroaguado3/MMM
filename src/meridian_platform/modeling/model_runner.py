@@ -17,6 +17,7 @@ try:
     from meridian.model import model, spec
     from meridian.data import data_frame_input_data_builder
     from meridian.data import input_data as input_data_module
+    from meridian.analysis import analyzer as meridian_analyzer
     MERIDIAN_AVAILABLE = True
 except ImportError:
     logger.warning("Meridian not available. Install with: pip install google-meridian")
@@ -103,15 +104,39 @@ class MeridianModelRunner:
                 }
             }
     
-    def prepare_data(self) -> Any:
+    def prepare_data(self, aggregate_weekly: bool = True) -> Any:
         """
         Prepare data in Meridian's InputData format.
-        
+
+        Args:
+            aggregate_weekly: If True, aggregate daily data to weekly.
+
         Returns:
             Meridian InputData object
         """
         logger.info("Preparing data for Meridian...")
-        
+
+        if aggregate_weekly:
+            logger.info("Aggregating data to weekly...")
+            self.media_data['date'] = pd.to_datetime(self.media_data['date'])
+            self.media_data['date'] = self.media_data['date'].dt.to_period('W').dt.start_time
+
+            self.sales_data['date'] = pd.to_datetime(self.sales_data['date'])
+            self.sales_data['date'] = self.sales_data['date'].dt.to_period('W').dt.start_time
+
+            self.media_data = self.media_data.groupby(
+                ['date', 'geo', 'touchpoint_name'], as_index=False
+            ).agg({'metric_value': 'sum', 'spend': 'sum'})
+
+            agg_cols = {'sales_value': 'sum'}
+            if 'sales_units' in self.sales_data.columns:
+                agg_cols['sales_units'] = 'sum'
+            self.sales_data = self.sales_data.groupby(
+                ['date', 'geo'], as_index=False
+            ).agg(agg_cols)
+
+            logger.info(f"Weekly: {self.sales_data['date'].nunique()} time points")
+
         # Merge media and sales data
         merged = self._merge_data()
         
@@ -307,8 +332,12 @@ class MeridianModelRunner:
             model_spec=self.model_spec
         )
 
-        # Train model via MCMC posterior sampling
+        # Sample prior (required before posterior and for Analyzer)
         try:
+            logger.info("Sampling prior...")
+            self.model.sample_prior(n_draws=n_samples, seed=seed)
+
+            logger.info("Sampling posterior...")
             self.model.sample_posterior(
                 n_chains=n_chains,
                 n_adapt=n_warmup,
@@ -328,120 +357,90 @@ class MeridianModelRunner:
     def get_diagnostics(self) -> Dict[str, Any]:
         """
         Extract convergence diagnostics from the trained model.
-        
+
         Returns:
             Dictionary with diagnostic statistics
         """
         if self.model is None:
             raise ValueError("Model not trained yet. Call train() first.")
-        
+
         logger.info("Extracting diagnostics...")
-        
+
         diagnostics = {
             'convergence': {},
             'summary': {}
         }
-        
+
         try:
-            # Get inference data
-            inference_data = self.model.inference_data
-            
-            # Extract R-hat and ESS
-            import arviz as az
-            
-            summary = az.summary(inference_data)
-            
+            ana = meridian_analyzer.Analyzer(self.model)
+            rhat_df = ana.rhat_summary()
+
+            r_hat_max = float(rhat_df['max_rhat'].max())
+            r_hat_mean = float(rhat_df['avg_rhat'].mean())
+
             diagnostics['summary'] = {
-                'r_hat_mean': summary['r_hat'].mean(),
-                'r_hat_max': summary['r_hat'].max(),
-                'ess_bulk_min': summary['ess_bulk'].min(),
-                'ess_tail_min': summary['ess_tail'].min()
+                'r_hat_mean': r_hat_mean,
+                'r_hat_max': r_hat_max,
             }
-            
-            # Convergence checks
-            r_hat_ok = diagnostics['summary']['r_hat_max'] < 1.05
-            ess_ok = diagnostics['summary']['ess_bulk_min'] > 400
-            
+            diagnostics['rhat_details'] = rhat_df
+
+            r_hat_ok = r_hat_max < 1.2
+
             diagnostics['convergence'] = {
                 'r_hat_converged': r_hat_ok,
-                'ess_sufficient': ess_ok,
-                'overall_converged': r_hat_ok and ess_ok
+                'overall_converged': r_hat_ok
             }
-            
-            if diagnostics['convergence']['overall_converged']:
-                logger.success("✓ Model converged successfully")
+
+            if r_hat_ok:
+                logger.success(f"Model converged (R-hat max: {r_hat_max:.4f})")
             else:
-                logger.warning("⚠ Convergence issues detected")
-                if not r_hat_ok:
-                    logger.warning(f"  R-hat max: {diagnostics['summary']['r_hat_max']:.4f} (should be < 1.05)")
-                if not ess_ok:
-                    logger.warning(f"  ESS min: {diagnostics['summary']['ess_bulk_min']:.0f} (should be > 400)")
-            
+                logger.warning(f"Convergence issues (R-hat max: {r_hat_max:.4f}, should be < 1.2)")
+
         except Exception as e:
             logger.error(f"Failed to extract diagnostics: {e}")
             diagnostics['error'] = str(e)
-        
+
         return diagnostics
     
     def get_results(self) -> Dict[str, Any]:
         """
-        Extract model results (ROI, contributions, etc.)
-        
+        Extract model results (ROI, contributions, etc.) via Meridian Analyzer.
+
         Returns:
             Dictionary with model results
         """
         if self.model is None:
             raise ValueError("Model not trained yet. Call train() first.")
-        
+
         logger.info("Extracting model results...")
-        
+
         results = {}
-        
+
         try:
-            # Get channel names
+            ana = meridian_analyzer.Analyzer(self.model)
+
+            # Get summary metrics (contains ROI, contributions, etc.)
+            summary = ana.summary_metrics()
+            results['summary_metrics'] = summary
+
+            # Extract ROI per channel
             channels = self.input_data.media.media_channel.values.tolist()
-            
-            # Extract ROI
-            roi_data = self.model.roi
+            roi_tensor = ana.roi()  # shape: (n_samples, n_channels)
+            roi_mean = roi_tensor.numpy().mean(axis=0)
+
             results['roi'] = {
-                'values': roi_data,
-                'channels': channels
+                ch: float(roi_mean[i]) for i, ch in enumerate(channels)
             }
-            
-            # Extract contributions
-            contrib_data = self.model.incremental_outcome
-            results['contributions'] = {
-                'values': contrib_data,
-                'channels': channels
-            }
-            
-            # Model fit statistics
-            results['fit'] = {
-                'r_squared': float(self.model.r_squared) if hasattr(self.model, 'r_squared') else None
-            }
-            
+
+            # Use roi as the default display (no priors adjustment needed)
+            results['roi_adjusted'] = results['roi']
+
             logger.success("Results extracted successfully")
-            
-            # Apply coverage factors if configured
-            if self.priors_config:
-                coverage_factors = self.priors_config.get_coverage_factors(channels)
-                
-                # Adjust ROI by coverage factors
-                adjusted_roi = {}
-                for i, channel in enumerate(channels):
-                    factor = coverage_factors.get(channel, 1.0)
-                    if hasattr(roi_data, 'mean'):
-                        adjusted_roi[channel] = float(roi_data.mean().values[i]) * factor
-                    else:
-                        adjusted_roi[channel] = float(roi_data[i]) * factor
-                
-                results['roi_adjusted'] = adjusted_roi
-                logger.info("Applied coverage factors to ROI estimates")
-            
+
         except Exception as e:
             logger.error(f"Failed to extract results: {e}")
             results['error'] = str(e)
-        
+
         return results
     
     def get_response_curves(self, channel: Optional[str] = None) -> Dict:

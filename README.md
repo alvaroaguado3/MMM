@@ -25,9 +25,6 @@ This platform enables marketing analysts and data scientists to:
 - **Visualize** results through interactive dashboards
 - **Simulate** what-if scenarios for budget planning
 
-![Platform Overview](assets/tool_screenshot1.png)
-*Figure 1: Platform dashboard showing data ingestion and model training interface*
-
 ## 🏗️ Architecture
 
 ```
@@ -48,6 +45,24 @@ meridian-mmm-platform/
 ├── config/                         # Configuration files
 └── docs/                           # Documentation
 ```
+
+---
+
+## 📸 Platform Screenshots
+
+<div align="center">
+
+### Data Ingestion & Model Training Interface
+![Platform Dashboard](assets/tool_screenshot1.png)
+*Interactive Streamlit dashboard for uploading data, configuring models, and monitoring training progress*
+
+### Model Results & Budget Optimization
+![Optimization Results](assets/tool_screenshot2.png)
+*Visualization of channel effectiveness, ROI analysis, and optimized budget allocations*
+
+</div>
+
+---
 
 ## 🚀 Quick Start
 
@@ -172,8 +187,7 @@ Meridian uses Bayesian priors to incorporate domain knowledge. See `config/prior
 - **Adstock Parameters**: Lagged media effects (carryover rates)
 - **Coverage Factors**: Sell-in to sell-out adjustment ratios
 
-![Model Results](assets/tool_screenshot2.png)
-*Figure 2: Model output showing channel effectiveness and optimization results*
+
 
 ## 🔬 Usage Examples
 
@@ -213,6 +227,12 @@ sales_loader = SalesDataLoader(
 )
 sales_data = sales_loader.load_and_validate()
 ```
+
+<div align="center">
+<img src="ui/assets/tool_screenshot1.png" width="700" alt="Data Upload Interface">
+<br>
+<em>The platform provides an intuitive interface for data validation and upload</em>
+</div>
 
 ### 2. Model Training
 
@@ -258,6 +278,13 @@ min_cost_allocation = optimizer.optimize_efficiency(
     constraints='medium'
 )
 ```
+
+<div align="center">
+<img src="ui/assets/tool_screenshot1.png" width="700" alt="Optimization Results">
+<img src="ui/assets/tool_screenshot2.png" width="700" alt="Optimization Results">
+<br>
+<em>Budget optimization results showing recommended allocations and expected ROI by channel</em>
+</div>
 
 ## 📈 Features
 
@@ -370,8 +397,3 @@ For the underlying methodology, statistical foundations, and theoretical framewo
 - [Meridian GitHub Repository](https://github.com/google/meridian)
 - [Google Research: MMM Best Practices](https://research.google/pubs/pub51998/)
 
-## 📷 Screenshots
-
-Place your tool screenshots in the `assets/` folder:
-- `assets/tool_screenshot1.png` - Platform dashboard and data upload interface
-- `assets/tool_screenshot2.png` - Model results and optimization outputs

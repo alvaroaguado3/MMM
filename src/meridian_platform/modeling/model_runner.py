@@ -14,7 +14,7 @@ from loguru import logger
 import xarray as xr
 
 try:
-    from meridian import model, spec
+    from meridian.model import model, spec
     from meridian.data import data_frame_input_data_builder
     from meridian.data import input_data as input_data_module
     MERIDIAN_AVAILABLE = True
@@ -46,23 +46,26 @@ class MeridianModelRunner:
         self,
         media_data: pd.DataFrame,
         sales_data: pd.DataFrame,
+        population_data: Optional[pd.DataFrame] = None,
         config_path: Optional[str] = 'config/model_defaults.yaml',
         priors_config: Optional[Any] = None
     ):
         """
         Initialize Meridian Model Runner.
-        
+
         Args:
             media_data: Standardized media DataFrame (from MediaDataLoader)
             sales_data: Standardized sales DataFrame (from SalesDataLoader)
+            population_data: DataFrame with geo and population columns
             config_path: Path to model configuration YAML
             priors_config: Optional PriorsConfigLoader instance
         """
         if not MERIDIAN_AVAILABLE:
             raise ImportError("Meridian is required. Install with: pip install google-meridian")
-        
+
         self.media_data = media_data.copy()
         self.sales_data = sales_data.copy()
+        self.population_data = population_data.copy() if population_data is not None else None
         self.priors_config = priors_config
         
         # Load configuration
@@ -93,9 +96,9 @@ class MeridianModelRunner:
                         'random_seed': 42
                     },
                     'time': {
-                        'max_lag': 13,
-                        'n_knots': 3,
-                        'adstock_decay_spec': 'normal'
+                        'max_lag': 8,
+                        'knots': None,
+                        'adstock_decay_spec': 'geometric'
                     }
                 }
             }
@@ -134,20 +137,22 @@ class MeridianModelRunner:
         ).reset_index()
         
         # Merge with sales data
-        full_data = media_wide.merge(sales_data, on=['date', 'geo'], how='inner')
-        full_data_spend = spend_wide.merge(sales_data, on=['date', 'geo'], how='inner')
+        full_data = media_wide.merge(self.sales_data, on=['date', 'geo'], how='inner')
+        full_data_spend = spend_wide.merge(self.sales_data, on=['date', 'geo'], how='inner')
         
         # Initialize InputData builder
         kpi_type = self.config['model'].get('kpi_type', 'non_revenue')
-        
+
         builder = data_frame_input_data_builder.DataFrameInputDataBuilder(
             kpi_type=kpi_type,
-            default_kpi_column='sales_value'
+            default_kpi_column='sales_value',
+            default_time_column='date',
+            default_media_time_column='date',
         )
-        
+
         # Add KPI data
-        builder = builder.with_kpi(full_data)
-        
+        builder = builder.with_kpi(full_data, kpi_col='sales_value', time_col='date')
+
         # Add revenue per KPI if units are available
         if 'sales_units' in full_data.columns:
             # Calculate revenue per unit
@@ -157,25 +162,33 @@ class MeridianModelRunner:
             )
             builder = builder.with_revenue_per_kpi(
                 full_data,
-                revenue_per_kpi_column='revenue_per_unit'
+                revenue_per_kpi_col='revenue_per_unit',
+                time_col='date'
             )
-        
+
         # Add media data
         media_cols = [ch for ch in channels]
-        spend_cols = [ch for ch in channels]
-        
+
         # Create combined dataframe with both media and spend
         combined = media_wide.copy()
         for ch in channels:
             combined[f"{ch}_spend"] = spend_wide[ch]
-        
+
         builder = builder.with_media(
             combined,
             media_cols=media_cols,
             media_spend_cols=[f"{ch}_spend" for ch in channels],
-            media_channels=channels
+            media_channels=channels,
+            time_col='date'
         )
-        
+
+        # Add population data
+        if self.population_data is not None:
+            builder = builder.with_population(
+                self.population_data,
+                population_col='population'
+            )
+
         # Build InputData
         self.input_data = builder.build()
         
@@ -216,8 +229,8 @@ class MeridianModelRunner:
         
         # Basic spec parameters
         spec_params = {
-            'max_lag': time_config.get('max_lag', 13),
-            'n_knots': time_config.get('n_knots', 3)
+            'max_lag': time_config.get('max_lag', 8),
+            'knots': time_config.get('knots', None)
         }
         
         # Add custom priors if available
@@ -284,22 +297,23 @@ class MeridianModelRunner:
         n_samples = n_samples or sampling_config.get('n_samples', 1000)
         n_chains = n_chains or sampling_config.get('n_chains', 2)
         seed = seed or sampling_config.get('random_seed', 42)
-        
+
         logger.info(f"Training Meridian model...")
-        logger.info(f"  Warmup: {n_warmup}, Samples: {n_samples}, Chains: {n_chains}")
-        
+        logger.info(f"  Adapt: {n_warmup}, Keep: {n_samples}, Chains: {n_chains}")
+
         # Initialize model
         self.model = model.Meridian(
             input_data=self.input_data,
             model_spec=self.model_spec
         )
-        
-        # Train model
+
+        # Train model via MCMC posterior sampling
         try:
-            self.model.fit(
-                num_warmup=n_warmup,
-                num_samples=n_samples,
-                num_chains=n_chains,
+            self.model.sample_posterior(
+                n_chains=n_chains,
+                n_adapt=n_warmup,
+                n_burnin=n_warmup,
+                n_keep=n_samples,
                 seed=seed
             )
             

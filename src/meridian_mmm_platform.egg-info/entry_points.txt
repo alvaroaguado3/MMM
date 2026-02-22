@@ -1,0 +1,2 @@
+[console_scripts]
+meridian-mmm = meridian_platform.cli:main

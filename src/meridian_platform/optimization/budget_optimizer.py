@@ -13,7 +13,7 @@ from pathlib import Path
 from loguru import logger
 
 try:
-    from meridian import optimizer
+    from meridian.analysis import optimizer
     MERIDIAN_AVAILABLE = True
 except ImportError:
     logger.warning("Meridian optimizer not available")

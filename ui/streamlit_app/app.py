@@ -10,6 +10,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from pathlib import Path
 import sys
+from PIL import Image
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'src'))
@@ -58,6 +59,8 @@ def initialize_session_state():
         st.session_state.sales_data = None
     if 'priors_config' not in st.session_state:
         st.session_state.priors_config = None
+    if 'population_data' not in st.session_state:
+        st.session_state.population_data = None
     if 'model' not in st.session_state:
         st.session_state.model = None
     if 'model_results' not in st.session_state:
@@ -85,8 +88,12 @@ def data_upload_page():
         
         if media_file:
             try:
-                # Load data
-                loader = MediaDataLoader(file_path=media_file)
+                # Load data - read uploaded file into DataFrame first
+                if media_file.name.endswith('.csv'):
+                    df = pd.read_csv(media_file)
+                else:
+                    df = pd.read_excel(media_file)
+                loader = MediaDataLoader(dataframe=df)
                 media_data = loader.load()
                 
                 # Validate
@@ -153,8 +160,12 @@ def data_upload_page():
         
         if sales_file:
             try:
-                # Load data
-                loader = SalesDataLoader(file_path=sales_file)
+                # Load data - read uploaded file into DataFrame first
+                if sales_file.name.endswith('.csv'):
+                    df = pd.read_csv(sales_file)
+                else:
+                    df = pd.read_excel(sales_file)
+                loader = SalesDataLoader(dataframe=df)
                 sales_data = loader.load()
                 
                 # Validate
@@ -208,6 +219,31 @@ def data_upload_page():
             except Exception as e:
                 st.error(f"Error loading sales data: {e}")
     
+    # Population Data Upload
+    st.markdown("---")
+    st.subheader("👥 Population Data")
+
+    population_file = st.file_uploader(
+        "Upload Population Data (CSV or Excel)",
+        type=['csv', 'xlsx'],
+        key='population_upload',
+        help="Upload population data with columns: geo, population (one row per geo)"
+    )
+
+    if population_file:
+        try:
+            if population_file.name.endswith('.csv'):
+                pop_df = pd.read_csv(population_file)
+            else:
+                pop_df = pd.read_excel(population_file)
+
+            st.session_state.population_data = pop_df
+            st.success(f"✅ Population data loaded: {len(pop_df)} geos")
+            with st.expander("📊 Population Preview"):
+                st.dataframe(pop_df, use_container_width=True)
+        except Exception as e:
+            st.error(f"Error loading population data: {e}")
+
     # Priors Configuration
     st.markdown("---")
     st.subheader("⚙️ Bayesian Priors Configuration")
@@ -264,8 +300,8 @@ def model_training_page():
         return
     
     # Check if data is loaded
-    if st.session_state.media_data is None or st.session_state.sales_data is None:
-        st.warning("⚠️ Please upload media and sales data first")
+    if st.session_state.media_data is None or st.session_state.sales_data is None or st.session_state.population_data is None:
+        st.warning("⚠️ Please upload media, sales, and population data first")
         if st.button("Go to Data Upload"):
             st.session_state.page = "📤 Data Upload"
             st.rerun()
@@ -345,6 +381,7 @@ def model_training_page():
                 runner = MeridianModelRunner(
                     media_data=st.session_state.media_data,
                     sales_data=st.session_state.sales_data,
+                    population_data=st.session_state.population_data,
                     priors_config=st.session_state.priors_config
                 )
                 
@@ -542,7 +579,8 @@ def main():
     
     # Sidebar
     with st.sidebar:
-        st.image("https://via.placeholder.com/200x80/1f77b4/ffffff?text=Meridian+MMM", use_container_width=True)
+        logo = Image.open("ui/assets/favicon.png")
+        st.image(logo, use_container_width=True)
         
         st.markdown("### Navigation")
         
@@ -560,6 +598,7 @@ def main():
         st.write("**Data:**")
         st.write(f"✅ Media" if st.session_state.media_data is not None else "❌ Media")
         st.write(f"✅ Sales" if st.session_state.sales_data is not None else "❌ Sales")
+        st.write(f"✅ Population" if st.session_state.population_data is not None else "❌ Population")
         
         st.write("**Model:**")
         st.write(f"✅ Trained" if st.session_state.model is not None else "❌ Not trained")
@@ -567,7 +606,7 @@ def main():
         st.markdown("---")
         
         if st.button("🗑️ Clear Session"):
-            for key in ['media_data', 'sales_data', 'priors_config', 'model', 'model_results']:
+            for key in ['media_data', 'sales_data', 'population_data', 'priors_config', 'model', 'model_results']:
                 st.session_state[key] = None
             st.rerun()
     

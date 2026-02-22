@@ -1,3 +1,22 @@
+Metadata-Version: 2.1
+Name: meridian-mmm-platform
+Version: 0.1.0
+Summary: A comprehensive Marketing Mix Modeling platform built on Google Meridian
+Home-page: https://github.com/yourusername/meridian-mmm-platform
+Author: Your Name
+Author-email: your.email@example.com
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Science/Research
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Requires-Python: >=3.11,<3.13
+Description-Content-Type: text/markdown
+Provides-Extra: dev
+Provides-Extra: gpu
+Provides-Extra: notebook
+
 # Meridian MMM Platform
 
 A comprehensive Marketing Mix Modeling (MMM) platform built on Google's Meridian framework, providing end-to-end capabilities for data ingestion, Bayesian modeling, budget optimization, and interactive visualization.
@@ -63,18 +82,6 @@ pip install -e .
 ```
 
 ### Database Setup (Optional)
-## Database Setup
-
-### Prerequisites
-
-1. **Install PostgreSQL** (if not already installed):
-
-```bash
-   # For mac installation with homebrew
-   brew install postgresql@14
-   brew services start postgresql@14
-   brew services list | grep postgresql
-```
 
 ```bash
 # Create PostgreSQL database

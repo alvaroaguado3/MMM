@@ -41,6 +41,9 @@ Thumbs.db
 .ipynb_checkpoints/
 *.ipynb_checkpoints
 
+# Streamlit
+.streamlit/secrets.toml
+
 # Data and logs
 *.log
 data/raw/

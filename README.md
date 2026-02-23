@@ -252,7 +252,35 @@ pytest tests/unit/test_data_ingestion.py
 - **[API Reference](docs/api_reference.md)** - Code documentation
 - **[Troubleshooting](docs/troubleshooting.md)** - Common issues and solutions
 
-## 🔧 Configuration
+## � Deployment
+
+### Streamlit Cloud Deployment
+
+Deploy this app to Streamlit Community Cloud for free:
+
+1. **Fork/Clone this repository** to your GitHub account
+2. **Sign up** at [share.streamlit.io](https://share.streamlit.io)
+3. **Create new app** with these settings:
+   - Repository: `your-username/MMM`
+   - Branch: `main`
+   - Main file: `ui/streamlit_app/app.py`
+4. **Deploy!** Your app will be live in minutes
+
+**Live Demo**: *[Your deployed app URL here]*
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions, configuration, and troubleshooting.
+
+### Local Development
+
+```bash
+# Install dependencies
+pip install -r requirements-streamlit.txt
+
+# Run locally
+streamlit run ui/streamlit_app/app.py
+```
+
+## �🔧 Configuration
 
 Key configuration files:
 

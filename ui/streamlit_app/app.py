@@ -79,7 +79,7 @@ def initialize_session_state():
 
 
 def data_upload_page():
-    """Data upload and validation page."""
+    """Data upload and validation page. """
     st.markdown('<p class="main-header">📤 Data Upload & Validation</p>', unsafe_allow_html=True)
     
     st.markdown("---")

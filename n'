@@ -1,0 +1,10 @@
+Mero ":wq" | git pull --no-rebase origin main
+e branch 'main' of https://github.com/alvaroaguado3/MMM
+# Please enter a commit message to explain why this merge is necessary,
+# especially if it merges an updated upstream into a topic branch.
+#
+# Lines starting with '#' will be ignored, and an empty message aborts
+T_EDITOR=true git pull --no-rebase origin main
+t merge --abort 2>/dev/null; git pull --no-edit origin main
+t status
+# ihe commit.

@@ -1,6 +1,7 @@
 # Meridian MMM Platform
 
 A comprehensive Marketing Mix Modeling (MMM) platform built on Google's Meridian framework, providing end-to-end capabilities for data ingestion, Bayesian modeling, budget optimization, and interactive visualization.
+
 **Live Demo**: [*QuickMMM*](https://quickmmm.streamlit.app)
 
 

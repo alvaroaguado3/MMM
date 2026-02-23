@@ -74,11 +74,85 @@ def initialize_session_state():
         st.session_state.model_results = None
     if 'training_just_completed' not in st.session_state:
         st.session_state.training_just_completed = False
+    if 'sample_data_just_loaded' not in st.session_state:
+        st.session_state.sample_data_just_loaded = False
 
 
 def data_upload_page():
     """Data upload and validation page."""
     st.markdown('<p class="main-header">📤 Data Upload & Validation</p>', unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Show success message after sample data load
+    if st.session_state.sample_data_just_loaded:
+        st.session_state.sample_data_just_loaded = False
+        st.balloons()
+        st.success("🎉 All sample data loaded successfully!")
+        st.info("👉 **Next Step:** Navigate to the **'🎓 Model Training'** section in the sidebar to train your first model!")
+    
+    # Sample data loader
+    st.info("👉 New to the platform? Click below to load sample data for testing!")
+    
+    if st.button("📦 Load Sample Data", type="secondary", use_container_width=True):
+        try:
+            with st.spinner("Loading sample data..."):
+                # Define sample data paths
+                sample_dir = Path(__file__).parent.parent.parent / 'data' / 'sample'
+                media_path = sample_dir / 'sample_media_data.csv'
+                sales_path = sample_dir / 'sample_sales_data.csv'
+                population_path = sample_dir / 'sample_population_data.csv'
+                
+                # Load media data
+                if media_path.exists():
+                    media_df = pd.read_csv(media_path)
+                    media_loader = MediaDataLoader(dataframe=media_df)
+                    media_data = media_loader.load()
+                    validation = media_loader.validate(media_data)
+                    
+                    if validation['valid']:
+                        st.session_state.media_data = media_data
+                        st.success("✅ Sample media data loaded")
+                    else:
+                        st.error("❌ Sample media data validation failed")
+                else:
+                    st.error(f"❌ Sample media data not found at {media_path}")
+                
+                # Load sales data
+                if sales_path.exists():
+                    sales_df = pd.read_csv(sales_path)
+                    sales_loader = SalesDataLoader(dataframe=sales_df)
+                    sales_data = sales_loader.load()
+                    validation = sales_loader.validate(sales_data)
+                    
+                    if validation['valid']:
+                        st.session_state.sales_data = sales_data
+                        st.success("✅ Sample sales data loaded")
+                    else:
+                        st.error("❌ Sample sales data validation failed")
+                else:
+                    st.error(f"❌ Sample sales data not found at {sales_path}")
+                
+                # Load population data
+                if population_path.exists():
+                    population_df = pd.read_csv(population_path)
+                    st.session_state.population_data = population_df
+                    st.success("✅ Sample population data loaded")
+                else:
+                    st.error(f"❌ Sample population data not found at {population_path}")
+                
+                # Show success message and rerun to update UI
+                if (st.session_state.media_data is not None and 
+                    st.session_state.sales_data is not None and 
+                    st.session_state.population_data is not None):
+                    st.session_state.sample_data_just_loaded = True
+                    st.rerun()
+                    
+        except Exception as e:
+            st.error(f"Error loading sample data: {e}")
+            import traceback
+            with st.expander("Error Details"):
+                st.code(traceback.format_exc())
     
     st.markdown("---")
     
